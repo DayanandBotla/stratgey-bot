@@ -678,8 +678,28 @@ class DhanClient:
     BASE = "https://api.dhan.co"
 
     def __init__(self, client_id: str, token: str):
-        self.client_id = client_id
-        self.headers   = {"access-token": token, "Content-Type": "application/json"}
+        self.client_id     = client_id
+        self._token        = token
+        self._token_set_at = now_ist().strftime("%Y-%m-%d %H:%M IST") if token else "Not set"
+
+    def update_token(self, token: str, client_id: str = None):
+        """Update Dhan token at runtime from dashboard — no restart needed."""
+        self._token        = token
+        self._token_set_at = now_ist().strftime("%Y-%m-%d %H:%M IST")
+        if client_id:
+            self.client_id = client_id
+        logging.info(f"[TOKEN] Updated at {self._token_set_at}")
+
+    @property
+    def headers(self):
+        """Always built fresh from current token — picks up daily updates."""
+        return {"access-token": self._token, "Content-Type": "application/json"}
+
+    @property
+    def token_status(self):
+        t = self._token
+        masked = f"{t[:6]}...{t[-4:]}" if t and len(t) > 10 else "NOT SET"
+        return {"set_at": self._token_set_at, "masked": masked, "is_set": bool(t)}
 
     async def get_candles(self, security_id, exchange, from_date, to_date, interval="5"):
         async with httpx.AsyncClient(timeout=15) as c:
@@ -1043,6 +1063,59 @@ def health():
         "sched_status"    : _sched_state["last_status"],
         "next_scan_ist"   : _sched_state.get("next_scan_ist"),
         "scans_done"      : _sched_state["scans_done"],
+    }
+
+
+@app.post("/config/token")
+async def update_token(payload: dict):
+    """
+    Update Dhan token from dashboard — call this every morning before trading.
+    Body: {"token": "your_new_token", "client_id": "optional"}
+    """
+    token = payload.get("token", "").strip()
+    client_id = payload.get("client_id", "").strip()
+
+    if not token:
+        return {"status": "error", "message": "token is required"}
+    if len(token) < 20:
+        return {"status": "error", "message": "token looks too short — paste the full Dhan token"}
+
+    dhan.update_token(token, client_id or None)
+    # Also persist to .env so it survives a restart
+    try:
+        env_path = Path(__file__).parent / ".env"
+        if env_path.exists():
+            lines = env_path.read_text().splitlines()
+            new_lines = []
+            token_written = False
+            for line in lines:
+                if line.startswith("DHAN_ACCESS_TOKEN="):
+                    new_lines.append(f"DHAN_ACCESS_TOKEN={token}")
+                    token_written = True
+                else:
+                    new_lines.append(line)
+            if not token_written:
+                new_lines.append(f"DHAN_ACCESS_TOKEN={token}")
+            env_path.write_text("\n".join(new_lines) + "\n")
+            logging.info("[TOKEN] Also persisted to .env")
+    except Exception as e:
+        logging.warning(f"[TOKEN] Could not persist to .env: {e}")
+
+    return {
+        "status"  : "ok",
+        "message" : "Token updated — no restart needed",
+        "ist"     : now_ist().strftime("%H:%M:%S IST"),
+        "token"   : dhan.token_status,
+    }
+
+
+@app.get("/config/token/status")
+def token_status():
+    """Check if token is set and when it was last updated."""
+    return {
+        "token"       : dhan.token_status,
+        "ist"         : now_ist().strftime("%H:%M:%S IST"),
+        "paper_trade" : PAPER_TRADE,
     }
 
 

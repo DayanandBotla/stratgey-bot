@@ -225,6 +225,21 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 .ep{display:none;align-items:center;gap:6px;background:rgba(0,212,255,.07);border:1px solid rgba(0,212,255,.2);border-radius:var(--rs);padding:8px 12px;margin-top:10px;font-size:11px;color:var(--cyan);}
 .ep.show{display:flex;}
 
+/* TOKEN BANNER */
+.tok-banner{background:linear-gradient(135deg,rgba(255,107,53,.15),rgba(255,200,64,.1));border:1.5px solid var(--orange);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.tok-badge{background:var(--red);color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;padding:4px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;}
+.tok-badge.ok{background:var(--green);color:var(--bg);}
+.tok-msg{font-size:12px;color:var(--text);flex:1;}
+.tok-msg strong{color:var(--orange);}
+.tok-time{font-family:var(--mono);font-size:10px;color:var(--muted);flex-shrink:0;}
+.tok-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.tok-inp{flex:1;background:var(--bg2);border:1.5px solid var(--orange);border-radius:var(--rs);color:var(--text);font-family:var(--mono);font-size:12px;padding:10px 13px;outline:none;min-width:200px;}
+.tok-inp:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,212,255,.1);}
+.tok-inp::placeholder{color:var(--muted);}
+.tok-apply{padding:10px 20px;border-radius:var(--rs);border:none;background:linear-gradient(135deg,var(--orange),#ff4500);color:#fff;font-family:var(--display);font-size:14px;letter-spacing:1px;cursor:pointer;white-space:nowrap;transition:all .2s;flex-shrink:0;}
+.tok-apply:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(255,107,53,.5);}
+.tok-apply:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+
 /* TOAST */
 .toast{position:fixed;bottom:18px;right:14px;background:var(--card2);border:1.5px solid var(--orange);border-radius:var(--rs);padding:11px 16px;font-size:12px;color:var(--text);max-width:300px;box-shadow:0 8px 28px rgba(255,107,53,.2);transform:translateY(16px);opacity:0;transition:all .3s;z-index:9999;font-family:var(--mono);}
 .toast.show{transform:translateY(0);opacity:1;}
@@ -275,6 +290,18 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 
 <!-- ═══════════ TAB: SIGNALS ═══════════ -->
 <div class="tab-panel active" id="tab-signals">
+
+  <!-- DAILY TOKEN BANNER — shown always at top of signals -->
+  <div class="tok-banner" id="tokBanner">
+    <div class="tok-badge" id="tokBadge">TOKEN REQUIRED</div>
+    <div class="tok-msg"><strong>Paste today's Dhan token</strong> — expires daily. Bot won't trade without a valid token.</div>
+    <div class="tok-time" id="tokTime">Not set</div>
+  </div>
+  <div class="tok-row mb12">
+    <input class="tok-inp" type="password" id="tokInput" placeholder="Paste today's Dhan access token here…" oninput="tokChanged()"/>
+    <button class="tok-apply" id="tokApplyBtn" onclick="applyToken()">⚡ APPLY TOKEN</button>
+  </div>
+
 
   <div class="sig-grid">
     <!-- NIFTY -->
@@ -799,8 +826,71 @@ function toast(msg,type=''){
   el.textContent=msg;_tt=setTimeout(()=>el.classList.remove('show'),3500);
 }
 
+/* ─ Token update ─────────────────────────────────────────────── */
+let tokValid = false;
+
+function tokChanged(){
+  const v = document.getElementById('tokInput').value.trim();
+  document.getElementById('tokApplyBtn').disabled = v.length < 20;
+}
+
+async function applyToken(){
+  const tok = document.getElementById('tokInput').value.trim();
+  const cid = document.getElementById('clientId').value.trim();
+  if(!tok || tok.length < 20){ toast('Paste the full Dhan token','err'); return; }
+
+  const url = document.getElementById('serverUrl').value.trim() || 'http://localhost:8001';
+  const btn = document.getElementById('tokApplyBtn');
+  btn.disabled = true; btn.textContent = 'Applying…';
+
+  try {
+    const r = await fetch(`${url}/config/token`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({token: tok, client_id: cid}),
+      signal: AbortSignal.timeout(8000),
+    });
+    const d = await r.json();
+    if(d.status === 'ok'){
+      tokValid = true;
+      document.getElementById('tokBadge').className = 'tok-badge ok';
+      document.getElementById('tokBadge').textContent = '✓ TOKEN ACTIVE';
+      document.getElementById('tokTime').textContent = d.token?.set_at || '';
+      document.getElementById('tokBanner').style.borderColor = 'var(--green)';
+      document.getElementById('tokInput').value = '';
+      document.getElementById('tokInput').placeholder = `Token active — set at ${d.token?.set_at || ''}`;
+      toast('Token applied ✓ — bot can trade now','ok');
+    } else {
+      toast(d.message || 'Token rejected','err');
+    }
+  } catch(e){
+    toast('Cannot reach bot server — is it running?','err');
+  }
+  btn.textContent = '⚡ APPLY TOKEN';
+  btn.disabled = false;
+}
+
+async function checkTokenStatus(){
+  const url = document.getElementById('serverUrl').value.trim() || 'http://localhost:8001';
+  try {
+    const r = await fetch(`${url}/config/token/status`, {signal: AbortSignal.timeout(4000)});
+    const d = await r.json();
+    if(d.token?.is_set){
+      tokValid = true;
+      document.getElementById('tokBadge').className = 'tok-badge ok';
+      document.getElementById('tokBadge').textContent = '✓ TOKEN ACTIVE';
+      document.getElementById('tokTime').textContent = d.token.set_at || '';
+      document.getElementById('tokBanner').style.borderColor = 'var(--green)';
+      document.getElementById('tokInput').placeholder = `Token active — set at ${d.token.set_at}`;
+    }
+  } catch(e){ /* server not reachable yet */ }
+}
+
 /* Init */
 loadAll();updateLots();updConf(60);
+document.getElementById('tokApplyBtn').disabled = true;
+// Check token status when page loads
+setTimeout(checkTokenStatus, 1000);
 </script>
 </body>
 </html>
