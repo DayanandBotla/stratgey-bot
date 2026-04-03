@@ -368,7 +368,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
   <div class="card mb12">
     <div class="at at-o"></div>
     <div class="g2"><div class="field"><label>Dhan Client ID</label><input type="text" id="clientId" value="1108455416" placeholder="e.g. 1108455416"/></div>
-    <div class="field"><label>Bot Server URL</label><input type="text" id="serverUrl" value="http://localhost:8001" oninput="updRibbon()"/></div></div>
+    <div class="field"><label>Bot Server URL</label><input type="text" id="serverUrl" value="http://5.223.85.60:8001" oninput="updRibbon()"/></div></div>
     <div class="field mt10"><label>Dhan Access Token</label><input type="password" id="accessToken" placeholder="Paste Dhan access token…"/></div>
     <button class="btn btn-go mt10" onclick="saveCreds()">SAVE CREDENTIALS</button>
   </div>
@@ -729,7 +729,7 @@ async function doScan(){
   if(!botOn)return;
   if(!mktOpen()){setRib('Market closed','waiting 09:15');return;}
   if(pastEntry())setRib('Past last entry 14:00','monitoring');
-  const url=document.getElementById('serverUrl').value.trim()||'http://localhost:8001';
+  const url=document.getElementById('serverUrl').value.trim()||'http://5.223.85.60:8001';
   for(const inst of activeInst){
     if(lockedInst===inst){console.log('[EXCL] Skip',inst);continue;}
     try{
@@ -839,7 +839,7 @@ async function applyToken(){
   const cid = document.getElementById('clientId').value.trim();
   if(!tok || tok.length < 20){ toast('Paste the full Dhan token','err'); return; }
 
-  const url = document.getElementById('serverUrl').value.trim() || 'http://localhost:8001';
+  const url = document.getElementById('serverUrl').value.trim() || 'http://5.223.85.60:8001';
   const btn = document.getElementById('tokApplyBtn');
   btn.disabled = true; btn.textContent = 'Applying…';
 
@@ -871,7 +871,7 @@ async function applyToken(){
 }
 
 async function checkTokenStatus(){
-  const url = document.getElementById('serverUrl').value.trim() || 'http://localhost:8001';
+  const url = document.getElementById('serverUrl').value.trim() || 'http://5.223.85.60:8001';
   try {
     const r = await fetch(`${url}/config/token/status`, {signal: AbortSignal.timeout(4000)});
     const d = await r.json();
