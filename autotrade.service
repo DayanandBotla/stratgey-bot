@@ -1,0 +1,36 @@
+[Unit]
+Description=AutoTrade Bot — NIFTY/BankNifty Options Bot
+After=network.target
+Wants=network-online.target
+
+[Service]
+# ── User that runs the process ────────────────────────────
+User=root
+Group=root
+WorkingDirectory=/root/autotrade
+
+# ── Load .env automatically ───────────────────────────────
+EnvironmentFile=/root/autotrade/.env
+
+# ── Start command ─────────────────────────────────────────
+ExecStart=/root/autotrade/venv/bin/uvicorn multi_strategy_bot:app \
+    --host 0.0.0.0 \
+    --port 8001 \
+    --log-level info \
+    --no-access-log
+
+# ── Restart policy ────────────────────────────────────────
+Restart=always
+RestartSec=10
+
+# ── Logging (view with: journalctl -u autotrade -f) ───────
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autotrade
+
+# ── Limits ────────────────────────────────────────────────
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
